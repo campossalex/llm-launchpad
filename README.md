@@ -24,6 +24,7 @@ llm-deploy/
 |---|---|
 | AWS EC2 GPU instance | g5.12xlarge recommended |
 | Deep Learning AMI | "Deep Learning AMI GPU TensorFlow 2.13" or similar |
+| ami-015c00898a6352220 | Available in eu-central-1 |
 | CUDA 11.8+ | Pre-installed on Deep Learning AMIs |
 | Ubuntu | Scripts target Ubuntu; adapt for Amazon Linux if needed |
 | Inbound port 80 open | In the EC2 Security Group |
@@ -35,7 +36,7 @@ llm-deploy/
 ### 1 — Launch EC2
 
 - Instance type: **g5.12xlarge** (or any G4/G5/P3/P4)
-- AMI: **Deep Learning Base AMI with Single CUDA (Amazon Linux 2023) 20260609** (Ubuntu) / **ami-015c00898a6352220** (eu-central-1)
+- AMI: **Deep Learning Base AMI with Single CUDA (Amazon Linux 2023) 20260609** (Ubuntu)
 - Storage: ≥ 150 GB root volume
 - Security group: allow SSH (22) and HTTP (80) inbound
 
