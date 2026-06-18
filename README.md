@@ -23,7 +23,7 @@ llm-deploy/
 | Requirement | Notes |
 |---|---|
 | AWS EC2 GPU instance | g5.12xlarge recommended |
-| Deep Learning AMI | "Deep Learning AMI GPU TensorFlow 2.13" or similar |
+| Deep Learning AMI | "Deep Learning Base AMI with Single CUDA (Amazon Linux 2023)" or similar |
 | ami-015c00898a6352220 | Available in eu-central-1 |
 | CUDA 11.8+ | Pre-installed on Deep Learning AMIs |
 | Ubuntu | Scripts target Ubuntu; adapt for Amazon Linux if needed |
