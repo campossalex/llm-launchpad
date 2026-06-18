@@ -37,31 +37,60 @@ need() { command -v "$1" &>/dev/null || die "Required tool not found: $1"; }
 
 # ── Pre-flight checks ─────────────────────────────────────────────────────────
 log "Running pre-flight checks..."
-need python3
-need pip3
-need nvidia-smi  || log "⚠️  nvidia-smi not found — vLLM requires an NVIDIA GPU"
+nvidia-smi &>/dev/null || log "⚠️  nvidia-smi not found — vLLM requires an NVIDIA GPU"
 
 CUDA_VER=$(nvcc --version 2>/dev/null | grep "release" | awk '{print $5}' | tr -d ',') || true
 log "CUDA version detected: ${CUDA_VER:-unknown}"
 
-# ── Step 1: Install Python dependencies ───────────────────────────────────────
-log "Installing Python dependencies..."
-$PIP_BIN install --upgrade pip
+# Require Python 3.9 — this is the version proven to work with vllm==0.3.3
+PYTHON39=$(command -v python3.9 2>/dev/null || true)
+[[ -n "$PYTHON39" ]] || die "Python 3.9 not found. Install it with: sudo dnf install python3.9 python3.9-devel"
+log "Python 3.9 found: $PYTHON39"
 
-$PIP_BIN install \
+# ── Step 1: Create venv and install Python dependencies ───────────────────────
+log "Installing Python dependencies..."
+
+mkdir -p "$APP_DIR"
+VENV_DIR="${APP_DIR}/venv"
+PYTHON_BIN="${VENV_DIR}/bin/python"
+PIP_BIN="${VENV_DIR}/bin/pip"
+
+# Always wipe and rebuild the venv for a clean install
+log "Removing existing virtual environment..."
+rm -rf "$VENV_DIR"
+log "Creating Python 3.9 virtual environment..."
+"$PYTHON39" -m venv "$VENV_DIR"
+
+# Verify the venv is Python 3.9 before installing anything
+ACTUAL_VER=$("$PYTHON_BIN" --version 2>&1)
+log "Venv Python: ${ACTUAL_VER}"
+echo "${ACTUAL_VER}" | grep -q "3.9" || die "Venv is not Python 3.9 (got: ${ACTUAL_VER})"
+
+"$PIP_BIN" install --upgrade pip
+
+# Pinned versions — proven working combination on Python 3.9
+# Do NOT change these versions without testing:
+#   vllm==0.3.3         last version supporting Python 3.9
+#   transformers==4.40.2 compatible with vllm 0.3.3 and Falcon 7B
+#   openai==0.28.1      required by langchain at this version
+"$PIP_BIN" install \
+  "vllm==0.3.3" \
+  "transformers==4.40.2" \
   "openai==0.28.1" \
   langchain \
-  vllm \
-  gptcache \
   fastapi \
   uvicorn \
   requests
+
+# Smoke test — abort if imports fail before touching systemd
+log "Verifying imports..."
+"$PYTHON_BIN" -c "from vllm import LLM, SamplingParams; import uvicorn, fastapi; print('✅ imports OK')" \
+  || die "Import check failed — aborting deployment"
 
 log "✅  Python dependencies installed."
 
 # ── Step 2: Deploy application files ──────────────────────────────────────────
 log "Deploying application to $APP_DIR..."
-mkdir -p "$APP_DIR"
 
 # Choose app file based on cache setting
 if [[ "$ENABLE_CACHE" == "true" ]]; then
