@@ -35,7 +35,7 @@ llm-deploy/
 ### 1 — Launch EC2
 
 - Instance type: **g5.12xlarge** (or any G4/G5/P3/P4)
-- AMI: **Deep Learning AMI GPU TensorFlow 2.13** (Ubuntu)
+- AMI: **Deep Learning Base AMI with Single CUDA (Amazon Linux 2023) 20260609** (Ubuntu) / **ami-015c00898a6352220** (eu-central-1)
 - Storage: ≥ 150 GB root volume
 - Security group: allow SSH (22) and HTTP (80) inbound
 
