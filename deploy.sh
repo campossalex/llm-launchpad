@@ -30,6 +30,26 @@ fi
 source "$CONFIG_FILE"
 echo "✅  Loaded config: $CONFIG_FILE"
 
+# ── Resolve EC2 public DNS (IMDSv2) ───────────────────────────────────────────
+resolve_public_dns() {
+  local token dns
+  token=$(curl -sf -X PUT "http://169.254.169.254/latest/api/token" \
+    -H "X-aws-ec2-metadata-token-ttl-seconds: 300" --connect-timeout 2) || true
+  if [[ -n "$token" ]]; then
+    dns=$(curl -sf -H "X-aws-ec2-metadata-token: $token" \
+      "http://169.254.169.254/latest/meta-data/public-hostname" --connect-timeout 2) || true
+  fi
+  echo "${dns:-}"
+}
+
+PUBLIC_DNS=$(resolve_public_dns)
+if [[ -n "$PUBLIC_DNS" ]]; then
+  echo "✅  EC2 public DNS: $PUBLIC_DNS"
+else
+  echo "⚠️  Could not resolve EC2 public DNS — falling back to 127.0.0.1"
+  PUBLIC_DNS="127.0.0.1"
+fi
+
 # ── Helpers ───────────────────────────────────────────────────────────────────
 log()  { echo "[$(date '+%H:%M:%S')] $*"; }
 die()  { echo "❌  $*" >&2; exit 1; }
@@ -80,7 +100,8 @@ echo "${ACTUAL_VER}" | grep -q "3.9" || die "Venv is not Python 3.9 (got: ${ACTU
   langchain \
   fastapi \
   uvicorn \
-  requests
+  requests \
+  flask
 
 # Smoke test — abort if imports fail before touching systemd
 log "Verifying imports..."
@@ -104,6 +125,9 @@ else
 fi
 
 cp "$APP_SRC" "${APP_DIR}/${APP_FILE}"
+
+# Deploy chat UI
+cp "${SCRIPT_DIR}/chat.py" "${APP_DIR}/chat.py"
 
 # Create cache directory if needed
 if [[ "$ENABLE_CACHE" == "true" ]]; then
@@ -200,12 +224,62 @@ else
   log "    tail -f $LOG_FILE"
 fi
 
+# ── Step 6: Start chat UI (optional) ──────────────────────────────────────────
+CHAT_SERVICE_NAME="llm-chat"
+
+if [[ "${LAUNCH_CHAT:-false}" == "true" ]]; then
+  log "Deploying chat UI service on port ${CHAT_PORT:-8080}..."
+
+  CHAT_SERVICE_FILE="/etc/systemd/system/${CHAT_SERVICE_NAME}.service"
+
+  sudo tee "$CHAT_SERVICE_FILE" > /dev/null <<EOF
+[Unit]
+Description=LLM Chat UI (Flask)
+After=network.target ${SERVICE_NAME}.service
+
+[Service]
+Type=simple
+User=${SERVICE_USER}
+WorkingDirectory=${APP_DIR}
+Environment="LLM_API_HOST=http://${PUBLIC_DNS}:${API_PORT}"
+Environment="CHAT_PORT=${CHAT_PORT:-8080}"
+ExecStart=${PYTHON_BIN} ${APP_DIR}/chat.py
+Restart=on-failure
+RestartSec=5
+StandardOutput=append:${CHAT_LOG_FILE:-/var/log/llm_chat.log}
+StandardError=append:${CHAT_LOG_FILE:-/var/log/llm_chat.log}
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+  sudo systemctl daemon-reload
+  sudo systemctl enable "$CHAT_SERVICE_NAME"
+  sudo systemctl start "$CHAT_SERVICE_NAME"
+  sleep 2
+
+  if systemctl is-active --quiet "$CHAT_SERVICE_NAME"; then
+    log "✅  Chat UI is running on port ${CHAT_PORT:-8080}."
+  else
+    log "⚠️  Chat UI may have failed. Check logs:"
+    log "    sudo journalctl -u $CHAT_SERVICE_NAME -n 50 --no-pager"
+    log "    tail -f ${CHAT_LOG_FILE:-/var/log/llm_chat.log}"
+  fi
+else
+  log "ℹ️  Chat UI skipped (LAUNCH_CHAT=${LAUNCH_CHAT:-false}). Set LAUNCH_CHAT=true in deploy.conf to enable."
+fi
+
 # ── Done ──────────────────────────────────────────────────────────────────────
 echo ""
 echo "============================================================"
 echo " Deployment complete!"
-echo " API endpoint : http://<EC2-PUBLIC-IP>/v1/generateText"
-echo " Health check : http://<EC2-PUBLIC-IP>/"
+echo " API endpoint : http://${PUBLIC_DNS}:${API_PORT}/v1/generateText"
+echo " Health check : http://${PUBLIC_DNS}:${API_PORT}/"
 echo " Logs         : $LOG_FILE"
 echo " Manage       : sudo systemctl {start|stop|restart|status} $SERVICE_NAME"
+if [[ "${LAUNCH_CHAT:-false}" == "true" ]]; then
+echo " Chat UI      : http://${PUBLIC_DNS}:${CHAT_PORT:-8080}"
+echo " Chat logs    : ${CHAT_LOG_FILE:-/var/log/llm_chat.log}"
+echo " Manage chat  : sudo systemctl {start|stop|restart|status} $CHAT_SERVICE_NAME"
+fi
 echo "============================================================"
