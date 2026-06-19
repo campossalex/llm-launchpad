@@ -291,6 +291,19 @@ HTML = """<!DOCTYPE html>
     }
     .bot-text.error { color: var(--error); }
 
+    .response-time {
+      font-size: .7rem;
+      color: var(--text-dim);
+      margin-top: 6px;
+      display: flex;
+      align-items: center;
+      gap: 4px;
+    }
+    .response-time svg {
+      width: 11px; height: 11px;
+      opacity: .6;
+    }
+
     /* thinking dots */
     .thinking-dots {
       display: flex;
@@ -506,7 +519,7 @@ HTML = """<!DOCTYPE html>
       chatWrap.scrollTop = chatWrap.scrollHeight;
     }
 
-    function appendBot(text, isError = false) {
+    function appendBot(text, isError = false, elapsedMs = null) {
       emptyState.style.display = 'none';
       const row = document.createElement('div');
       row.className = 'msg-row bot';
@@ -515,12 +528,26 @@ HTML = """<!DOCTYPE html>
       avatar.className = 'bot-avatar';
       avatar.textContent = 'AI';
 
+      const body = document.createElement('div');
+      body.style.flex = '1';
+
       const textEl = document.createElement('div');
       textEl.className = isError ? 'bot-text error' : 'bot-text';
       textEl.textContent = text;
+      body.appendChild(textEl);
+
+      if (elapsedMs !== null && !isError) {
+        const timing = document.createElement('div');
+        timing.className = 'response-time';
+        timing.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+          stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+          ${elapsedMs.toLocaleString()} ms`;
+        body.appendChild(timing);
+      }
 
       row.appendChild(avatar);
-      row.appendChild(textEl);
+      row.appendChild(body);
       chatWrap.appendChild(row);
       chatWrap.scrollTop = chatWrap.scrollHeight;
     }
@@ -563,6 +590,7 @@ HTML = """<!DOCTYPE html>
       appendUser(prompt);
       showThinking();
 
+      const t0 = performance.now();
       try {
         const r = await fetch('/api/chat', {
           method: 'POST',
@@ -570,9 +598,10 @@ HTML = """<!DOCTYPE html>
           body: JSON.stringify({ prompt })
         });
         const d = await r.json();
+        const elapsed = Math.round(performance.now() - t0);
         removeThinking();
         if (r.ok && d.text !== undefined) {
-          appendBot(d.text.trim());
+          appendBot(d.text.trim(), false, elapsed);
         } else {
           appendBot(d.error || 'Unexpected response.', true);
         }
