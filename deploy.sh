@@ -126,9 +126,6 @@ fi
 
 cp "$APP_SRC" "${APP_DIR}/${APP_FILE}"
 
-# Deploy chat UI
-cp "${SCRIPT_DIR}/chat.py" "${APP_DIR}/chat.py"
-
 # Create cache directory if needed
 if [[ "$ENABLE_CACHE" == "true" ]]; then
   mkdir -p "$CACHE_DIR"
