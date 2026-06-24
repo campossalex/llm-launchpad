@@ -326,3 +326,10 @@ sudo systemctl start llm-api
 | First call (cold, no cache) | ~600 ms |
 | Repeated call (GPTCache hit) | ~3–5 ms |
 | Response time shown in Chat UI | per-request ms indicator |
+
+## TO DOS
+
+- Test caching layer
+- Terraform support
+- Review Ubuntu support
+
