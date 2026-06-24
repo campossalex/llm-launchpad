@@ -332,4 +332,5 @@ sudo systemctl start llm-api
 - Test caching layer
 - Terraform support
 - Review Ubuntu support
+- OpenAI standard response
 
